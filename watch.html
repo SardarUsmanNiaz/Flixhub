@@ -1,0 +1,180 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+  <meta name="description" content="Watch movies and series on FlixHub with server switching, episode selection, details, comments, and recommendations." />
+  <title>Watch - FlixHub</title>
+  <script src="https://cdn.tailwindcss.com"></script>
+  <script>
+    tailwind.config = {
+      theme: {
+        extend: {
+          colors: {
+            night: '#121212',
+            panel: '#1b1b24',
+            muted: '#a5adbb',
+            accent: '#e50914',
+            glow: '#ff3b30'
+          },
+          boxShadow: {
+            soft: '0 24px 80px rgba(0, 0, 0, 0.35)'
+          }
+        }
+      }
+    };
+  </script>
+  <link rel="stylesheet" href="css/styles.css" />
+</head>
+<body class="bg-night text-white antialiased">
+  <div id="mobileMenuOverlay" class="mobile-menu-overlay xl:hidden"></div>
+
+  <header class="fixed inset-x-0 top-0 z-40 border-b border-white/5 bg-[#070b13]/85 backdrop-blur-xl">
+    <nav class="mx-auto flex max-w-[112rem] flex-col gap-4 px-4 py-3 sm:px-6 lg:px-10 xl:flex-row xl:items-center xl:justify-between" aria-label="Watch page navigation">
+      <div class="flex items-center justify-between gap-4">
+        <a href="index.html#home" class="group flex items-center gap-2" aria-label="FlixHub home">
+          <img src="headerlogo.jpeg" alt="FlixHub" class="header-logo" />
+        </a>
+        <button id="mobileMenuButton" type="button" class="rounded-xl border border-white/10 p-3 text-white transition hover:border-accent hover:text-accent xl:hidden" aria-controls="watchNavLinks" aria-expanded="false">
+          <span class="sr-only">Open menu</span>
+          <svg id="menuIconOpen" class="h-5 w-5" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" aria-hidden="true">
+            <path d="M4 6h16M4 12h16M4 18h16" stroke-linecap="round" />
+          </svg>
+          <svg id="menuIconClose" class="h-5 w-5 hidden" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" aria-hidden="true">
+            <path d="M6 6l12 12M18 6 6 18" stroke-linecap="round" />
+          </svg>
+        </button>
+      </div>
+
+      <div id="watchNavLinks" class="hidden flex-col gap-4 pb-4 xl:flex xl:flex-1 xl:flex-row xl:items-center xl:justify-end xl:pb-0">
+        <div class="relative w-full xl:max-w-md">
+          <label for="watchSearch" class="sr-only">Search movies and series</label>
+          <svg class="pointer-events-none absolute left-4 top-1/2 h-5 w-5 -translate-y-1/2 text-muted" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" aria-hidden="true">
+            <circle cx="11" cy="11" r="7" />
+            <path d="m20 20-3.5-3.5" stroke-linecap="round" />
+          </svg>
+          <input id="watchSearch" type="search" placeholder="Search movies, series, anime..." class="w-full rounded-full border border-white/10 bg-white/10 py-3 pl-12 pr-4 text-sm text-white outline-none transition placeholder:text-muted focus:border-accent focus:bg-white/15 focus:ring-4 focus:ring-accent/10" autocomplete="off" />
+          <div id="watchSearchDropdown" class="search-dropdown hidden"></div>
+        </div>
+        <div class="flex flex-col xl:flex-row flex-wrap items-start xl:items-center gap-1 text-sm font-semibold text-slate-200">
+          <a class="nav-link text-accent" href="livetv.html">Live TV</a>
+          <a class="nav-link" href="index.html#latest">Browse</a>
+          <a class="nav-link" href="index.html#highestImdb">Highest IMDB</a>
+          <a class="nav-link" href="index.html#favorites">Favorites</a>
+        </div>
+      </div>
+    </nav>
+  </header>
+
+  <div id="apiBanner" class="hidden border-b border-yellow-500/30 bg-yellow-500/10 px-4 py-3 text-sm text-yellow-100 sm:px-6 lg:px-8">
+    <div class="mx-auto flex max-w-7xl flex-col gap-3 sm:flex-row sm:items-center sm:justify-between">
+      <p>Catalog requests failed. Add a free TMDB API key to continue.</p>
+      <div class="flex gap-2">
+        <input id="apiKeyInput" type="text" placeholder="Paste TMDB API key" class="w-full rounded-xl border border-white/10 bg-black/30 px-3 py-2 text-white outline-none focus:border-accent sm:w-72" />
+        <button id="apiKeySave" type="button" class="rounded-xl bg-accent px-4 py-2 font-bold text-white">Save</button>
+      </div>
+    </div>
+  </div>
+
+  <main class="pb-16">
+    <section id="watchBackdrop" class="watch-hero relative overflow-hidden bg-black">
+      <div class="relative z-10 pt-16">
+        <div class="watch-player-frame bg-black">
+          <iframe
+            id="watchFrame"
+            class="h-full w-full"
+            title="FlixHub watch player"
+            allow="autoplay; encrypted-media; picture-in-picture; fullscreen; clipboard-write"
+            allowfullscreen
+          ></iframe>
+        </div>
+
+        <div class="watch-control-panel mx-auto grid max-w-[112rem] gap-3 px-4 py-4 sm:px-6 md:grid-cols-3 lg:px-10">
+          <div>
+            <label for="serverSelect" class="mb-2 block text-xs font-bold uppercase tracking-[0.2em] text-slate-400">Server</label>
+            <select id="serverSelect" class="episode-select"></select>
+          </div>
+          <div id="seasonField" class="hidden">
+            <label for="seasonSelect" class="mb-2 block text-xs font-bold uppercase tracking-[0.2em] text-slate-400">Season</label>
+            <select id="seasonSelect" class="episode-select"></select>
+          </div>
+          <div id="episodeField" class="hidden">
+            <label for="episodeSelect" class="mb-2 block text-xs font-bold uppercase tracking-[0.2em] text-slate-400">Episode</label>
+            <select id="episodeSelect" class="episode-select"></select>
+          </div>
+        </div>
+      </div>
+    </section>
+
+    <div class="mx-auto mt-8 grid max-w-[112rem] gap-8 px-4 sm:px-6 lg:grid-cols-[1fr_380px] lg:px-10">
+      <div class="space-y-8">
+        <section class="watch-detail-card rounded-[1.5rem] border border-white/10 bg-panel/80 p-5 shadow-soft sm:p-6" aria-labelledby="watchTitle">
+          <div class="grid gap-6 md:grid-cols-[180px_1fr] lg:grid-cols-[220px_1fr]">
+            <img id="watchPoster" class="watch-poster hidden md:block" src="https://placehold.co/500x750/070b13/e50914?text=FlixHub" alt="" loading="lazy" />
+            <div>
+              <div class="flex flex-col gap-4 sm:flex-row sm:items-start sm:justify-between">
+                <div>
+                  <a href="index.html#home" class="mb-4 inline-flex items-center gap-2 text-xs font-bold uppercase tracking-[0.22em] text-muted transition hover:text-accent">← Back to home</a>
+                  <p class="eyebrow">Now watching</p>
+                  <h1 id="watchTitle" class="watch-title">Preparing player…</h1>
+                  <p id="watchMeta" class="mt-3 text-xs font-bold uppercase tracking-[0.2em] text-red-100"></p>
+                </div>
+                <button id="favoriteButton" type="button" class="card-button secondary-button favorite-button shrink-0">Favorite</button>
+              </div>
+              <div id="detailFacts" class="mt-5 flex flex-wrap gap-2"></div>
+              <p id="watchOverview" class="mt-5 text-base leading-8 text-slate-300">Loading description…</p>
+              <div id="castList" class="mt-6 grid gap-3 sm:grid-cols-2 xl:grid-cols-3"></div>
+            </div>
+          </div>
+        </section>
+
+        <section class="rounded-[1.5rem] border border-white/10 bg-panel/80 p-5 shadow-soft sm:p-6" aria-labelledby="commentsTitle">
+          <div class="section-heading">
+            <div>
+              <p class="eyebrow">Community</p>
+              <h2 id="commentsTitle">Comments</h2>
+            </div>
+            <span id="commentCount" class="pill">0 comments</span>
+          </div>
+          <form id="commentForm" class="grid gap-3 rounded-2xl border border-white/10 bg-white/[0.04] p-4">
+            <input id="commentName" type="text" maxlength="40" placeholder="Your name" class="comment-input" required />
+            <textarea id="commentText" rows="4" maxlength="500" placeholder="Share your thoughts about this movie or episode…" class="comment-input" required></textarea>
+            <button type="submit" class="card-button primary-button justify-self-start px-5">Post Comment</button>
+          </form>
+          <div id="commentsList" class="mt-5 space-y-3"></div>
+        </section>
+      </div>
+
+      <aside class="space-y-8">
+        <section class="rounded-[1.5rem] border border-white/10 bg-panel/80 p-5 shadow-soft" aria-labelledby="recommendationsTitle">
+          <div class="section-heading">
+            <div>
+              <p class="eyebrow">More like this</p>
+              <h2 id="recommendationsTitle">Recommendations</h2>
+            </div>
+          </div>
+          <div id="recommendationsGrid" class="recommendation-list"></div>
+        </section>
+
+        <section class="rounded-[1.5rem] border border-white/10 bg-panel/80 p-5 shadow-soft" aria-labelledby="tipsTitle">
+          <p class="eyebrow">Playback tips</p>
+          <h2 id="tipsTitle" class="text-2xl font-black tracking-tight">If a server fails</h2>
+          <div class="mt-4 space-y-3 text-sm leading-6 text-muted">
+            <p>Switch servers from the control bar below the player.</p>
+            <p>For series, choose the season and episode before trying another server.</p>
+            <p>FlixHub does not host media files; playback is provided by third-party embeds.</p>
+          </div>
+        </section>
+      </aside>
+    </div>
+  </main>
+
+  <footer class="border-t border-white/10 bg-black/30 px-4 py-8 text-center text-sm text-muted sm:px-6 lg:px-8">
+    <p>© <span id="year"></span> FlixHub. Catalog metadata from TMDB. No media files are hosted here.</p>
+  </footer>
+
+  <script src="js/config.js"></script>
+  <script src="js/api.js"></script>
+  <script src="js/watch.js"></script>
+</body>
+</html>

@@ -1,0 +1,287 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+  <meta name="description" content="FlixHub - Watch free Live TV channels from around the world." />
+  <title>Live TV - FlixHub</title>
+  <script src="https://cdn.tailwindcss.com"></script>
+  <script>
+    tailwind.config = {
+      theme: {
+        extend: {
+          colors: {
+            night: '#121212',
+            panel: '#1b1b24',
+            muted: '#a5adbb',
+            accent: '#e50914',
+            glow: '#ff3b30'
+          },
+          boxShadow: {
+            soft: '0 24px 80px rgba(0, 0, 0, 0.35)'
+          }
+        }
+      }
+    };
+  </script>
+  <link rel="stylesheet" href="css/styles.css" />
+  <!-- HLS.js for Live TV Streaming -->
+  <script src="https://cdn.jsdelivr.net/npm/hls.js@latest"></script>
+  <style>
+    /* Live TV Specific Styles */
+    .country-card {
+      display: flex;
+      flex-direction: column;
+      align-items: center;
+      justify-content: center;
+      gap: 0.75rem;
+      padding: 1.5rem;
+      border-radius: 1.5rem;
+      background: rgba(255, 255, 255, 0.03);
+      border: 1px solid rgba(255, 255, 255, 0.05);
+      transition: all 0.3s cubic-bezier(0.4, 0, 0.2, 1);
+      cursor: pointer;
+    }
+    .country-card:hover {
+      background: rgba(255, 255, 255, 0.08);
+      border-color: rgba(229, 9, 20, 0.5);
+      transform: translateY(-4px);
+    }
+    .country-flag {
+      font-size: 3rem;
+      line-height: 1;
+    }
+    .channel-card {
+      display: flex;
+      align-items: center;
+      gap: 1rem;
+      padding: 1rem;
+      border-radius: 1rem;
+      background: rgba(255, 255, 255, 0.03);
+      border: 1px solid rgba(255, 255, 255, 0.05);
+      transition: all 0.2s ease;
+      cursor: pointer;
+    }
+    .channel-card:hover, .channel-card.active {
+      background: rgba(255, 255, 255, 0.08);
+      border-color: #e50914;
+    }
+    .channel-logo {
+      width: 48px;
+      height: 48px;
+      border-radius: 0.5rem;
+      object-fit: contain;
+      background: #000;
+      padding: 4px;
+    }
+    .player-layout {
+      display: grid;
+      grid-template-columns: 1fr 320px;
+      height: calc(100vh - 8rem);
+      max-height: 800px;
+      gap: 1rem;
+    }
+    @media (max-width: 1024px) {
+      .player-layout {
+        grid-template-columns: 1fr;
+        grid-template-rows: auto 1fr;
+        height: 85vh;
+      }
+    }
+    .channel-sidebar {
+      background: rgba(0, 0, 0, 0.4);
+      border-radius: 1rem;
+      border: 1px solid rgba(255, 255, 255, 0.1);
+      overflow-y: auto;
+      padding: 1rem;
+    }
+    /* Hide scrollbar for a cleaner look */
+    .channel-sidebar::-webkit-scrollbar { width: 6px; }
+    .channel-sidebar::-webkit-scrollbar-track { background: transparent; }
+    .channel-sidebar::-webkit-scrollbar-thumb { background: rgba(255, 255, 255, 0.2); border-radius: 3px; }
+  </style>
+</head>
+<body class="bg-night text-white antialiased">
+  <div id="mobileMenuOverlay" class="mobile-menu-overlay xl:hidden"></div>
+
+  <header class="fixed inset-x-0 top-0 z-40 border-b border-white/5 bg-[#070b13]/80 backdrop-blur-xl">
+    <nav class="mx-auto flex max-w-[112rem] flex-col gap-4 px-4 py-3 sm:px-6 lg:px-10 xl:flex-row xl:items-center xl:justify-between" aria-label="Main navigation">
+      <div class="flex items-center justify-between gap-4">
+        <a href="index.html" class="group flex items-center gap-2" aria-label="FlixHub home">
+          <img src="headerlogo.jpeg" alt="FlixHub" class="header-logo" />
+        </a>
+        <button id="mobileMenuButton" type="button" class="rounded-xl border border-white/10 p-3 text-white transition hover:border-accent hover:text-accent xl:hidden" aria-controls="tvNavLinks" aria-expanded="false">
+          <span class="sr-only">Open menu</span>
+          <svg id="menuIconOpen" class="h-5 w-5" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" aria-hidden="true">
+            <path d="M4 6h16M4 12h16M4 18h16" stroke-linecap="round" />
+          </svg>
+          <svg id="menuIconClose" class="h-5 w-5 hidden" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" aria-hidden="true">
+            <path d="M6 6l12 12M18 6 6 18" stroke-linecap="round" />
+          </svg>
+        </button>
+      </div>
+      <div id="tvNavLinks" class="hidden flex-col gap-4 pb-4 xl:flex xl:flex-1 xl:flex-row xl:items-center xl:justify-end xl:pb-0">
+        <div class="flex flex-col xl:flex-row flex-wrap items-start xl:items-center gap-1 text-sm font-semibold text-slate-200">
+          <a class="nav-link text-accent" href="livetv.html">Live TV</a>
+          <a class="nav-link" href="index.html">Movies & Series</a>
+          <a class="nav-link" href="index.html#highestImdb">Highest IMDB</a>
+          <a class="nav-link" href="index.html#favorites">Favorites</a>
+        </div>
+      </div>
+    </nav>
+  </header>
+
+  <main class="pb-16 pt-32 min-h-screen">
+    <div class="mx-auto max-w-[112rem] px-4 sm:px-6 lg:px-10">
+      
+      <!-- Loading State -->
+      <div id="loadingState" class="flex flex-col items-center justify-center py-20">
+        <div class="h-12 w-12 animate-spin rounded-full border-4 border-white/10 border-t-accent"></div>
+        <p class="mt-4 text-sm font-bold uppercase tracking-[0.2em] text-muted">Loading Global Channels...</p>
+      </div>
+
+      <!-- Country Selection View -->
+      <section id="countrySection" class="hidden">
+        <div class="mb-10 text-center">
+          <p class="inline-flex rounded-full bg-accent px-4 py-1.5 text-xs font-black uppercase tracking-[0.22em] text-black">IPTV Network</p>
+          <h1 class="mt-4 text-4xl font-black tracking-tight sm:text-5xl">Select Your Region</h1>
+          <p class="mx-auto mt-4 max-w-2xl text-lg text-muted">Browse thousands of free, publicly available live TV streams from around the world.</p>
+          
+          <div class="mt-8 mx-auto max-w-md relative">
+            <svg class="pointer-events-none absolute left-4 top-1/2 h-5 w-5 -translate-y-1/2 text-muted" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
+              <circle cx="11" cy="11" r="7" />
+              <path d="m20 20-3.5-3.5" stroke-linecap="round" />
+            </svg>
+            <input id="countrySearch" type="search" placeholder="Search countries..." class="w-full rounded-full border border-white/10 bg-white/5 py-3 pl-12 pr-4 text-white outline-none transition focus:border-accent focus:bg-white/10" autocomplete="off" />
+          </div>
+
+          <div class="mt-4 mx-auto max-w-md">
+            <label for="countrySelect" class="sr-only">Select country</label>
+            <select id="countrySelect" class="w-full rounded-full border border-white/10 bg-[#15151d] py-3 px-4 text-white outline-none transition focus:border-accent focus:bg-[#1d1d28]">
+              <option value="">Select a country to load channels</option>
+            </select>
+          </div>
+        </div>
+        
+        <div id="countryGrid" class="grid grid-cols-2 gap-4 sm:grid-cols-3 md:grid-cols-4 lg:grid-cols-6 xl:grid-cols-8">
+          <!-- Countries injected via JS -->
+        </div>
+      </section>
+
+      <!-- Channels View -->
+      <section id="channelSection" class="hidden">
+        <div class="mb-8 flex flex-col items-start justify-between gap-4 sm:flex-row sm:items-center border-b border-white/10 pb-6">
+          <div>
+            <button id="backToCountries" class="mb-2 text-xs font-bold uppercase tracking-[0.2em] text-accent transition hover:text-white flex items-center gap-1">
+              <svg class="h-4 w-4" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M19 12H5M12 19l-7-7 7-7" stroke-linecap="round" stroke-linejoin="round"/></svg>
+              All Regions
+            </button>
+            <h2 id="currentCountryTitle" class="text-3xl font-black tracking-tight flex items-center gap-3">
+              <span id="currentCountryFlag"></span>
+              <span id="currentCountryName">Country Name</span>
+            </h2>
+            <p id="channelCountText" class="mt-1 text-sm text-muted">0 channels available</p>
+          </div>
+          
+          <div class="relative w-full sm:w-72">
+            <input id="channelSearch" type="search" placeholder="Search channels..." class="w-full rounded-xl border border-white/10 bg-white/5 py-2 px-4 text-sm text-white outline-none transition focus:border-accent" autocomplete="off" />
+          </div>
+        </div>
+
+        <div id="channelGrid" class="grid grid-cols-1 gap-3 sm:grid-cols-2 md:grid-cols-3 lg:grid-cols-4 xl:grid-cols-5">
+          <!-- Channels injected via JS -->
+        </div>
+      </section>
+
+    </div>
+  </main>
+
+  <footer class="site-footer px-4 py-8 sm:px-6 lg:px-8 border-t border-white/10 mt-auto">
+    <div class="mx-auto max-w-[112rem] text-center">
+      <p class="text-sm leading-6 text-muted">© <span id="year"></span> FlixHub. IPTV data provided by iptv-org open source database. FlixHub does not host any media streams.</p>
+    </div>
+  </footer>
+
+  <!-- Live TV Player Modal -->
+  <div id="livePlayerModal" class="fixed inset-0 z-50 hidden items-center justify-center bg-black/95 p-4 backdrop-blur-md" role="dialog" aria-modal="true">
+    <div class="w-full max-w-[112rem] rounded-[1.5rem] bg-panel shadow-soft border border-white/10 overflow-hidden flex flex-col">
+      <!-- Modal Header -->
+      <div class="flex items-center justify-between border-b border-white/10 p-4 bg-black/20">
+        <div class="flex items-center gap-3">
+          <img id="playerChannelLogo" src="" alt="" class="h-10 w-10 rounded bg-black object-contain p-1 border border-white/10">
+          <div>
+            <p class="text-[10px] font-bold uppercase tracking-[0.2em] text-accent flex items-center gap-2">
+              <span class="h-2 w-2 rounded-full bg-red-500 animate-pulse"></span> LIVE
+            </p>
+            <h2 id="playerChannelName" class="text-xl font-black">Channel Name</h2>
+          </div>
+        </div>
+        <button id="closeLiveModal" type="button" class="rounded-xl border border-white/10 p-3 text-muted transition hover:border-accent hover:text-white bg-black/40">
+          <svg class="h-5 w-5" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
+            <path d="M6 6l12 12M18 6 6 18" stroke-linecap="round" />
+          </svg>
+        </button>
+      </div>
+      
+      <!-- Player Area + Sidebar -->
+      <div class="player-layout p-4 bg-[#0a0a0f]">
+        <!-- Video Container -->
+        <div class="relative w-full h-full rounded-xl overflow-hidden bg-black border border-white/10 shadow-2xl flex items-center justify-center">
+          <!-- Error State -->
+          <div id="playerErrorState" class="absolute inset-0 flex-col items-center justify-center bg-black/80 z-10 hidden">
+             <svg class="h-12 w-12 text-red-500 mb-3" fill="none" viewBox="0 0 24 24" stroke="currentColor" stroke-width="1.5">
+               <path stroke-linecap="round" stroke-linejoin="round" d="M12 9v2m0 4h.01m-6.938 4h13.856c1.54 0 2.502-1.667 1.732-3L13.732 4c-.77-1.333-2.694-1.333-3.464 0L3.34 16c-.77 1.333.192 3 1.732 3z" />
+             </svg>
+             <p class="text-lg font-bold">Stream Offline</p>
+             <p class="text-sm text-muted mt-1 max-w-sm text-center">This public stream is currently unavailable. Please try another channel from the sidebar.</p>
+          </div>
+          
+          <video id="liveVideoPlayer" class="w-full h-full" controls autoplay playsinline></video>
+        </div>
+
+        <!-- Channel Switcher Sidebar -->
+        <div class="flex flex-col h-full bg-[#12121a] rounded-xl border border-white/5 overflow-hidden">
+          <div class="p-3 border-b border-white/5 bg-black/20">
+            <p class="text-xs font-bold uppercase tracking-[0.2em] text-muted">More Channels</p>
+          </div>
+          <div id="playerChannelList" class="flex-1 overflow-y-auto p-2 space-y-1">
+            <!-- Sidebar channels injected via JS -->
+          </div>
+        </div>
+      </div>
+    </div>
+  </div>
+
+  <script src="js/livetv.js"></script>
+  <script>
+    // Mobile menu toggle for Live TV page
+    (function() {
+      const btn = document.getElementById('mobileMenuButton');
+      const nav = document.getElementById('tvNavLinks');
+      const overlay = document.getElementById('mobileMenuOverlay');
+      const iconOpen = document.getElementById('menuIconOpen');
+      const iconClose = document.getElementById('menuIconClose');
+      if (btn && nav) {
+        function toggleMenu() {
+          const isOpen = nav.classList.toggle('hidden') === false;
+          btn.setAttribute('aria-expanded', String(isOpen));
+          if (iconOpen) iconOpen.classList.toggle('hidden', isOpen);
+          if (iconClose) iconClose.classList.toggle('hidden', !isOpen);
+          if (overlay) overlay.classList.toggle('active', isOpen);
+          if (isOpen) {
+            nav.classList.add('flex');
+          } else {
+            nav.classList.remove('flex');
+          }
+        }
+        btn.addEventListener('click', toggleMenu);
+        if (overlay) overlay.addEventListener('click', toggleMenu);
+      }
+      if (document.getElementById('year')) {
+        document.getElementById('year').textContent = new Date().getFullYear();
+      }
+    })();
+  </script>
+
+</body>
+</html>
